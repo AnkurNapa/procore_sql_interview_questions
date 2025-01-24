@@ -1,0 +1,213 @@
+/* Return count of projects per department name */ select d.name as department_name
+
+from EMPLOYEES e Inner Join DEPARTMENTS d on e.id = d.id
+
+/* Return average projects per employee for each department */
+
+/* Return first and last name of employees without a project */
+
+/* Return highest budget project for each employee (employee name, project title, project budget) */
+
+/* Return average budget for projects starting in each month, 2017-2018, and percentage change (formatted to 2 decimal places) vs prior month */
+
+============================================================================================
+============================================================================================
+-- /* Return count of projects per department name */
+select * from [dbo].[departments]
+select * from projects 
+SELECT * from employees
+select * from employees_projects
+
+SELECT * 
+from projects p 
+join employees_projects ep on p.id =ep.project_id  
+join employees e on ep.employee_id =e.id
+join departments d on e.department_id = d.id
+
+
+
+SELECT d.name,Count(distinct p.id) 
+from projects p 
+join employees_projects ep on p.id =ep.project_id  
+join employees e on ep.employee_id =e.id
+join departments d on e.department_id = d.id
+group by d.name
+
+
+
+/* Return first and last name of employees without a project */
+
+SELECT first_name, last_name 
+from projects p 
+left join employees_projects ep on p.id =ep.project_id  
+left join employees e on ep.employee_id =e.id
+left join departments d on e.department_id = d.id
+where project_id is null
+
+
+/* Return highest budget project for each employee (employee name, project title, project budget) */
+SELECT *, 
+ROW_NUMBER() OVER (partition by CONCAT(firs_name, last_name), project title, project budget order by budget) 
+from projects p 
+join employees_projects ep on p.id =ep.project_id  
+join employees e on ep.employee_id =e.id
+join departments d on e.department_id = d.id
+
+SELECT *
+from projects p 
+join employees_projects ep on p.id =ep.project_id  
+join employees e on ep.employee_id =e.id
+join departments d on e.department_id = d.id
+
+
+SELECT top 1 
+first_name,
+last_name,
+title,budget, 
+MAX(budget) OVER (partition by title, first_name, last_name order by budget DESC)
+from projects p 
+join employees_projects ep on p.id =ep.project_id  
+join employees e on ep.employee_id =e.id
+join departments d on e.department_id = d.id
+
+
+SELECT first_name,last_name, title,budget, sum(budget)
+from projects p 
+join employees_projects ep on p.id =ep.project_id  
+join employees e on ep.employee_id =e.id
+join departments d on e.department_id = d.id
+GROUP by first_name, last_name, title
+ORDER by MAX(budget)
+
+
+
+/* Return highest budget project for each employee (employee name, project title, project budget) */
+with ranked_project as (
+    SELECT 
+CONCAT(first_name, ' ', last_name) as emp_name,
+p.title as project_title,
+p.budget as project_budget,
+ROW_NUMBER() OVER (partition by e.id order by p.budget desc) as rank_num
+from projects p 
+join employees_projects ep on p.id =ep.project_id  
+join employees e on ep.employee_id =e.id
+join departments d on e.department_id = d.id)
+
+select emp_name,
+project_title,
+project_budget
+from ranked_project
+where rank_num = 1
+
+
+
+---using max windows function
+WITH max_budgets AS (
+    SELECT 
+        e.id AS employee_id,
+        CONCAT(e.first_name, ' ', e.last_name) AS employee_name,
+        p.title AS project_title,
+        p.budget AS project_budget,
+        MAX(p.budget) OVER (PARTITION BY e.id) AS max_budget
+    FROM 
+        employees e
+    JOIN 
+        employees_projects ep 
+        ON e.id = ep.employee_id
+    JOIN 
+        projects p 
+        ON ep.project_id = p.id
+)
+SELECT 
+    employee_name,
+    project_title,
+    project_budget
+FROM 
+    max_budgets
+WHERE 
+    project_budget = max_budget;
+
+===================================================================
+===================================================================
+/* Return average budget for projects starting in each month, 2017-2018, and percentage change (formatted to 2 decimal places) vs prior month */
+
+
+SELECT *
+from projects p 
+join employees_projects ep on p.id =ep.project_id  
+join employees e on ep.employee_id =e.id
+join departments d on e.department_id = d.id
+
+==============================================
+============================================
+WITH montly_avg AS (
+select 
+format(p.start_date,  'yyyy,MM') as month,
+AVG(p.budget) as avg_budget
+from projects p
+where 
+p.start_date BETWEEN '2017-01-01' and  '2018-12-31'
+GROUP by FORMAT(p.start_date, 'yyyy,MM')
+),
+
+percent_change as (
+    SELECT
+    ma1.month,
+    ma1.avg_budget,
+    lag(ma1_avg_budget) over (order by ma1.month) as prev_month_avg_budget,
+    case 
+        when lag(ma1_avg_budget) over (order by ma1.month) is null then null
+        ELSE round(
+          (( ma1.avg_budget - lag(ma1.avg_budget) over (ORDER by ma1.month))/
+          LAG(ma1.avg_budget) OVER (ORDER BY ma1.month)) * 100, 2
+        )
+        end as perct_change
+    from montly_avg ma1
+)
+
+
+SELECT 
+    month,
+    ROUND(avg_budget, 2) AS avg_budget,
+    perct_change
+FROM 
+    percent_change
+ORDER BY 
+    month;
+
+
+
+    WITH monthly_averages AS (
+    SELECT 
+        FORMAT(p.start_date, 'yyyy-MM') AS month, -- Extract year and month
+        AVG(p.budget) AS avg_budget
+    FROM 
+        projects p
+    WHERE 
+        p.start_date BETWEEN '2017-01-01' AND '2018-12-31'
+    GROUP BY 
+        FORMAT(p.start_date, 'yyyy-MM')
+),
+percentage_change AS (
+    SELECT 
+        ma1.month,
+        ma1.avg_budget,
+        LAG(ma1.avg_budget) OVER (ORDER BY ma1.month) AS prev_avg_budget,
+        CASE 
+            WHEN LAG(ma1.avg_budget) OVER (ORDER BY ma1.month) IS NULL THEN NULL
+            ELSE ROUND(
+                ((ma1.avg_budget - LAG(ma1.avg_budget) OVER (ORDER BY ma1.month)) /
+                 LAG(ma1.avg_budget) OVER (ORDER BY ma1.month)) * 100, 2
+            )
+        END AS pct_change
+    FROM 
+        monthly_averages ma1
+)
+SELECT 
+    month,
+    ROUND(avg_budget, 2) AS avg_budget,
+    pct_change
+FROM 
+    percentage_change
+ORDER BY 
+    month;
